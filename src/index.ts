@@ -187,19 +187,6 @@ export async function apply(ctx: Context, config: Config) {
   }
 
   /**
-   * 生成玩家信息图片
-   * @param playerData 玩家数据
-   * @param session 会话对象
-   * @returns 渲染后的图片元素
-   */
-  async function generatePlayerImage(playerData: any, session: any): Promise<h> {
-    await session.send(`正在生成玩家 ${playerData.player} 的信息，请稍候...`)
-    const htmlContent = playerDataToHtml(playerData, config)
-    const imageBuffer = await htmlToImage(htmlContent, ctx)
-    return h.image(imageBuffer, 'image/png')
-  }
-
-  /**
    * 根据配置和命令选项决定是否使用图片模式
    * @param useToggle 是否使用切换选项
    * @returns 是否使用图片模式
@@ -250,8 +237,8 @@ export async function apply(ctx: Context, config: Config) {
         })
       }
 
-      // 将长文本分段
-      const segments = splitLongText(content)
+      // 按内容块分隔消息
+      const segments = splitByContentBlocks(content)
       for (const segment of segments) {
         messages.push({
           type: 'node',
@@ -280,22 +267,171 @@ export async function apply(ctx: Context, config: Config) {
   }
 
   /**
-   * 将长文本分段
+   * 将内容按区块分隔
    * @param text 完整文本
-   * @param maxLength 每段最大长度 (默认500)
    * @returns 分段后的文本数组
    */
-  function splitLongText(text: string, maxLength: number = 500): string[] {
-    if (text.length <= maxLength) return [text]
+  function splitByContentBlocks(text: string): string[] {
+    // 如果文本很短，不用分割
+    if (text.length < 100) return [text]
 
     const segments = []
     const lines = text.split('\n')
     let currentSegment = ''
+    let currentTitle = ''
+
+    // 检测标题行的正则表达式 - 匹配常见的emoji+标题格式
+    // 例如：'📊 排名与分数'、'🗺️ 地图类型统计'、'🏁 最近完成记录'等
+    const titleRegex = /^[^\w\s]*[\p{Emoji}\p{Emoji_Presentation}].*[：:].*/u
+    const emojiTitleRegex = /^[^\w\s]*[\p{Emoji}\p{Emoji_Presentation}][\s\w]+/u
+
+    // 标题前应该换行的关键词分组
+    const groupTogether = {
+      '基本信息': ['排名', '分数', '活跃度', '游戏'],
+      '地图相关': ['地图类型', '地图统计'],
+      '完成记录': ['最近完成', '完成记录'],
+      '队友活跃': ['常用队友', '活跃度统计']
+    }
+
+    // 处理第一行 - 通常是标题
+    if (lines.length > 0 && lines[0].trim()) {
+      currentSegment = lines[0]
+      currentTitle = 'header'
+    }
+
+    // 识别内容段落并分割
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim()
+
+      // 跳过空行但保持格式
+      if (!line) {
+        if (currentSegment) {
+          currentSegment += '\n'
+        }
+        continue
+      }
+
+      // 检测是否是新的小节标题
+      const isSectionTitle = line.startsWith('\n') || titleRegex.test(line) || emojiTitleRegex.test(line)
+
+      // 如果是新小节，决定是新建段落还是合并到当前段落
+      if (isSectionTitle) {
+        const titleText = line.replace(/[\p{Emoji}\p{Emoji_Presentation}]/gu, '').trim()
+        let shouldGroup = false
+
+        // 检查当前标题是否应与现有段落分组
+        for (const [group, keywords] of Object.entries(groupTogether)) {
+          const isCurrentInGroup = keywords.some(keyword => currentTitle.includes(keyword))
+          const isNewInGroup = keywords.some(keyword => titleText.includes(keyword))
+
+          // 如果都属于同一个组，合并在一起
+          if (isCurrentInGroup && isNewInGroup) {
+            shouldGroup = true
+            break
+          }
+        }
+
+        // 根据分组逻辑决定是否保存当前段落
+        if (!shouldGroup && currentSegment.trim()) {
+          segments.push(currentSegment.trim())
+          currentSegment = line
+          currentTitle = titleText
+        } else {
+          // 合并到当前段落
+          currentSegment += '\n' + line
+          // 更新当前标题以便后续判断
+          if (!currentTitle) currentTitle = titleText
+        }
+      } else {
+        // 不是小节标题，继续添加到当前段落
+        currentSegment += '\n' + line
+      }
+    }
+
+    // 添加最后一个段落
+    if (currentSegment.trim()) {
+      segments.push(currentSegment.trim())
+    }
+
+    // 处理特殊情况：如果只有一个段落但太长，尝试在内容上进行更智能的分割
+    if (segments.length === 1 && segments[0].length > 500) {
+      return smartSplitLongSegment(segments[0])
+    }
+
+    // 没有成功分段或分段结果不合理时，使用通用逻辑
+    if (segments.length === 0 || (segments.length === 1 && text.length > 500)) {
+      return genericSplit(text)
+    }
+
+    return segments
+  }
+
+  /**
+   * 智能分割单个长段落
+   * @param text 长文本段落
+   * @returns 分段后的文本数组
+   */
+  function smartSplitLongSegment(text: string): string[] {
+    const lines = text.split('\n')
+    const segments = []
+    let currentSegment = ''
+    let lineCount = 0
+
+    // 主标题始终单独成段
+    if (lines.length > 0) {
+      segments.push(lines[0])
+      lines.shift()
+    }
+
+    // 尝试按逻辑内容分组
+    for (const line of lines) {
+      // 如果当前段落已经很长或行数超过15行，新起一段
+      if ((currentSegment.length > 300 || lineCount > 15) && line.trim() && !line.startsWith('•')) {
+        if (currentSegment.trim()) {
+          segments.push(currentSegment.trim())
+        }
+        currentSegment = line
+        lineCount = 1
+        continue
+      }
+
+      currentSegment += '\n' + line
+      if (line.trim()) lineCount++
+    }
+
+    // 添加最后一个段落
+    if (currentSegment.trim()) {
+      segments.push(currentSegment.trim())
+    }
+
+    return segments
+  }
+
+  /**
+   * 通用文本分割算法
+   * @param text 要分割的文本
+   * @returns 分段后的文本数组
+   */
+  function genericSplit(text: string): string[] {
+    // 如果文本不太长，直接返回
+    if (text.length < 500) return [text]
+
+    const segments = []
+    const lines = text.split('\n')
+
+    // 主标题单独一段
+    if (lines.length > 0) {
+      segments.push(lines[0])
+      lines.shift()
+    }
+
+    let currentSegment = ''
+    const maxLength = 500
 
     for (const line of lines) {
-      // 如果当前行添加后会超出长度限制，先保存当前段落
+      // 如果加上当前行会超出长度限制，先保存当前段落
       if (currentSegment.length + line.length + 1 > maxLength && currentSegment.length > 0) {
-        segments.push(currentSegment)
+        segments.push(currentSegment.trim())
         currentSegment = ''
       }
 
@@ -305,23 +441,11 @@ export async function apply(ctx: Context, config: Config) {
       } else {
         currentSegment = line
       }
-
-      // 特殊处理超长行
-      if (currentSegment.length > maxLength) {
-        // 将当前段落按最大长度切分
-        const lineParts = []
-        for (let i = 0; i < currentSegment.length; i += maxLength) {
-          lineParts.push(currentSegment.substring(i, i + maxLength))
-        }
-        // 添加完整段落和部分新段落
-        segments.push(...lineParts.slice(0, -1))
-        currentSegment = lineParts[lineParts.length - 1]
-      }
     }
 
     // 添加最后一个段落
-    if (currentSegment.length > 0) {
-      segments.push(currentSegment)
+    if (currentSegment.trim().length > 0) {
+      segments.push(currentSegment.trim())
     }
 
     return segments
