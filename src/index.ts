@@ -504,7 +504,7 @@ export async function apply(ctx: Context, config: Config) {
     : '-v 切换为图片模式显示'
 
   // 主命令组
-  const cmd = ctx.command('ddr [player:string]', '查询 DDNet 玩家信息')
+  const cmd = ctx.command('ddr [player:text]', '查询 DDNet 玩家信息')
     .option('visual', toggleDescription, { fallback: undefined })
     .action(async ({ session, options }, player) => {
       if (!player) {
@@ -537,7 +537,7 @@ export async function apply(ctx: Context, config: Config) {
     })
 
   // 其他子命令
-  cmd.subcommand('.bind [player:string]', '绑定或解绑 DDNet 玩家')
+  cmd.subcommand('.bind [player:text]', '绑定或解绑 DDNet 玩家')
     .action(async ({ session }, player) => {
       // 不需要添加-v选项，绑定命令不涉及数据展示
       if (!player) {
@@ -566,7 +566,7 @@ export async function apply(ctx: Context, config: Config) {
       }
     })
 
-  cmd.subcommand('.points [player:string]', '查询玩家的分数')
+  cmd.subcommand('.points [player:text]', '查询玩家的分数')
     .option('visual', toggleDescription, { fallback: undefined })
     .action(async ({ session, options }, player) => {
       player = player || getBoundId(session.userId)
@@ -586,7 +586,7 @@ export async function apply(ctx: Context, config: Config) {
       }
     })
 
-  cmd.subcommand('.pointsAll [player:string]', '查询玩家的详细分数信息')
+  cmd.subcommand('.pointsAll [player:text]', '查询玩家的详细分数信息')
     .option('visual', toggleDescription, { fallback: undefined })
     .action(async ({ session, options }, player) => {
       player = player || getBoundId(session.userId)
@@ -606,7 +606,7 @@ export async function apply(ctx: Context, config: Config) {
       }
     })
 
-  cmd.subcommand('.maprank <map:string> [player:string]', '查询玩家在特定地图的排名')
+  cmd.subcommand('.maprank <map:text> [player:text]', '查询玩家在特定地图的排名')
     .option('visual', toggleDescription, { fallback: undefined })
     .action(async ({ session, options }, map, player) => {
       player = player || getBoundId(session.userId)
@@ -631,7 +631,7 @@ export async function apply(ctx: Context, config: Config) {
     })
 
   // 添加地图信息查询命令
-  cmd.subcommand('.map <map:string>', '查询地图详细信息')
+  cmd.subcommand('.map <map:text>', '查询地图详细信息')
     .option('visual', toggleDescription, { fallback: undefined })
     .action(async ({ session, options }, map) => {
       if (!map) {
@@ -650,7 +650,7 @@ export async function apply(ctx: Context, config: Config) {
     })
 
   // 修改原有地图排行榜查询，使用优化后的展示
-  cmd.subcommand('.topmap <map:string>', '查询地图的全球排行榜')
+  cmd.subcommand('.topmap <map:text>', '查询地图的全球排行榜')
     .option('visual', toggleDescription, { fallback: undefined })
     .action(async ({ session, options }, map) => {
       if (!map) {
@@ -668,7 +668,7 @@ export async function apply(ctx: Context, config: Config) {
       }
     })
 
-  cmd.subcommand('.MapFinish [player:string]', '查询玩家的地图完成度统计')
+  cmd.subcommand('.MapFinish [player:text]', '查询玩家的地图完成度统计')
     .option('visual', toggleDescription, { fallback: undefined })
     .action(async ({ session, options }, player) => {
       player = player || getBoundId(session.userId)
