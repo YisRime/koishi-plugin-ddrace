@@ -1,6 +1,7 @@
 import { Context } from 'koishi'
 import {} from 'koishi-plugin-puppeteer'
 import { formatter } from './text'
+import { Config } from '.'
 
 /**
  * 将HTML内容渲染为图片
@@ -171,9 +172,10 @@ export async function htmlToImage(html: string, ctx: Context): Promise<Buffer> {
 /**
  * 将玩家数据转换为HTML展示格式
  * @param playerData DDNet API返回的玩家数据对象
+ * @param config 显示配置
  * @returns 格式化后的HTML字符串
  */
-export function playerDataToHtml(playerData: any): string {
+export function playerDataToHtml(playerData: any, config?: Config): string {
   const playerId = playerData.player
   let htmlContent = `
     <div class="header">
@@ -181,33 +183,47 @@ export function playerDataToHtml(playerData: any): string {
     </div>
   `;
 
+  // 应用默认配置（如果未提供）
+  const displayConfig = {
+    showRankInfo: config?.showRankInfo !== false,
+    showActivityInfo: config?.showActivityInfo !== false,
+    showGameInfo: config?.showGameInfo !== false,
+    showMapTypeStats: config?.showMapTypeStats !== false,
+    showRecentFinishes: config?.showRecentFinishes !== false,
+    showFavoritePartners: config?.showFavoritePartners !== false,
+    showActivityStats: config?.showActivityStats !== false,
+    showMapDetails: config?.showMapDetails !== false
+  }
+
   // 合并显示排名和分数信息
-  htmlContent += `
-    <div class="section">
-      <div class="section-title">📊 排名与分数</div>
-  `;
+  if (displayConfig.showRankInfo) {
+    htmlContent += `
+      <div class="section">
+        <div class="section-title">📊 排名与分数</div>
+    `;
 
-  // 总分信息
-  if (playerData.points && typeof playerData.points === 'object') {
-    const total = playerData.points.total || 0;
-    const rank = playerData.points.rank || '未排名';
-    const points = playerData.points.points || 0;
-    htmlContent += `<div class="stat-item">• 总分: <span class="highlight">${points}/${total}</span> (全球第 ${rank} 名)</div>`;
+    // 总分信息
+    if (playerData.points && typeof playerData.points === 'object') {
+      const total = playerData.points.total || 0;
+      const rank = playerData.points.rank || '未排名';
+      const points = playerData.points.points || 0;
+      htmlContent += `<div class="stat-item">• 总分: <span class="highlight">${points}/${total}</span> (全球第 ${rank} 名)</div>`;
+    }
+
+    // 个人与团队排名合并显示
+    if (playerData.rank && typeof playerData.rank === 'object') {
+      htmlContent += `<div class="stat-item">• 个人排名: 第 <span class="highlight">${playerData.rank.rank || '?'}</span> 名 (${playerData.rank.points || 0} 分)</div>`;
+    }
+
+    if (playerData.team_rank && typeof playerData.team_rank === 'object') {
+      htmlContent += `<div class="stat-item">• 团队排名: 第 <span class="highlight">${playerData.team_rank.rank || '?'}</span> 名 (${playerData.team_rank.points || 0} 分)</div>`;
+    }
+
+    htmlContent += `</div>`;
   }
-
-  // 个人与团队排名合并显示
-  if (playerData.rank && typeof playerData.rank === 'object') {
-    htmlContent += `<div class="stat-item">• 个人排名: 第 <span class="highlight">${playerData.rank.rank || '?'}</span> 名 (${playerData.rank.points || 0} 分)</div>`;
-  }
-
-  if (playerData.team_rank && typeof playerData.team_rank === 'object') {
-    htmlContent += `<div class="stat-item">• 团队排名: 第 <span class="highlight">${playerData.team_rank.rank || '?'}</span> 名 (${playerData.team_rank.points || 0} 分)</div>`;
-  }
-
-  htmlContent += `</div>`;
 
   // 最近时间段成绩合并显示
-  if (playerData.points_last_year || playerData.points_last_month || playerData.points_last_week) {
+  if (displayConfig.showActivityInfo && (playerData.points_last_year || playerData.points_last_month || playerData.points_last_week)) {
     htmlContent += `
       <div class="section">
         <div class="section-title">📅 最近活跃度</div>
@@ -231,35 +247,37 @@ export function playerDataToHtml(playerData: any): string {
   }
 
   // 首次完成和常用服务器
-  htmlContent += `
-    <div class="section">
-      <div class="section-title">🎮 游戏信息</div>
-  `;
+  if (displayConfig.showGameInfo) {
+    htmlContent += `
+      <div class="section">
+        <div class="section-title">🎮 游戏信息</div>
+    `;
 
-  if (playerData.favorite_server) {
-    const server = typeof playerData.favorite_server === 'object' ?
-                  (playerData.favorite_server.server || JSON.stringify(playerData.favorite_server)) :
-                  playerData.favorite_server;
-    htmlContent += `<div class="stat-item">• 常用服务器: <span class="highlight">${server}</span></div>`;
+    if (playerData.favorite_server) {
+      const server = typeof playerData.favorite_server === 'object' ?
+                    (playerData.favorite_server.server || JSON.stringify(playerData.favorite_server)) :
+                    playerData.favorite_server;
+      htmlContent += `<div class="stat-item">• 常用服务器: <span class="highlight">${server}</span></div>`;
+    }
+
+    if (playerData.hours_played_past_365_days !== undefined) {
+      htmlContent += `<div class="stat-item">• 年度游戏时间: <span class="highlight">${playerData.hours_played_past_365_days}</span> 小时</div>`;
+    }
+
+    if (playerData.first_finish) {
+      const date = new Date(playerData.first_finish.timestamp * 1000);
+      const formattedDate = `${date.getFullYear()}年${(date.getMonth()+1)}月${date.getDate()}日`;
+      const map = playerData.first_finish.map;
+      const timeString = formatter.time(playerData.first_finish.time);
+
+      htmlContent += `<div class="stat-item">• 首次完成: ${formattedDate} - <span class="highlight">${map}</span> (${timeString})</div>`;
+    }
+
+    htmlContent += `</div>`;
   }
-
-  if (playerData.hours_played_past_365_days !== undefined) {
-    htmlContent += `<div class="stat-item">• 年度游戏时间: <span class="highlight">${playerData.hours_played_past_365_days}</span> 小时</div>`;
-  }
-
-  if (playerData.first_finish) {
-    const date = new Date(playerData.first_finish.timestamp * 1000);
-    const formattedDate = `${date.getFullYear()}年${(date.getMonth()+1)}月${date.getDate()}日`;
-    const map = playerData.first_finish.map;
-    const timeString = formatter.time(playerData.first_finish.time);
-
-    htmlContent += `<div class="stat-item">• 首次完成: ${formattedDate} - <span class="highlight">${map}</span> (${timeString})</div>`;
-  }
-
-  htmlContent += `</div>`;
 
   // 地图完成详细统计 - 显示所有地图类型的详细信息
-  if (playerData.types && typeof playerData.types === 'object') {
+  if (displayConfig.showMapTypeStats && playerData.types && typeof playerData.types === 'object') {
     htmlContent += `
       <div class="section">
         <div class="section-title">🗺️ 地图类型统计</div>
@@ -293,7 +311,7 @@ export function playerDataToHtml(playerData: any): string {
             htmlContent += `<div class="stat-item">• ${typeName}: <span class="highlight">${typePoints}</span> 分 (${typeRank}), 完成 <span class="highlight">${mapCount}</span> 张地图</div>`;
 
             // 列出地图名称
-            if (mapCount > 0) {
+            if (mapCount > 0 && displayConfig.showMapDetails) {
               const mapNames: string[] = Object.keys(typeInfo.maps).slice(0, 10);
               htmlContent += `<div class="map-list">包括: ${mapNames.join(', ')}${mapCount > 10 ? ' 等...' : ''}</div>`;
             }
@@ -306,7 +324,7 @@ export function playerDataToHtml(playerData: any): string {
   }
 
   // 最近完成的地图
-  if (playerData.last_finishes && Array.isArray(playerData.last_finishes) && playerData.last_finishes.length > 0) {
+  if (displayConfig.showRecentFinishes && playerData.last_finishes && Array.isArray(playerData.last_finishes) && playerData.last_finishes.length > 0) {
     htmlContent += `
       <div class="section">
         <div class="section-title">🏁 最近完成记录 (${playerData.last_finishes.length}项)</div>
@@ -335,7 +353,7 @@ export function playerDataToHtml(playerData: any): string {
   }
 
   // 最常合作的伙伴
-  if (playerData.favorite_partners && Array.isArray(playerData.favorite_partners) && playerData.favorite_partners.length > 0) {
+  if (displayConfig.showFavoritePartners && playerData.favorite_partners && Array.isArray(playerData.favorite_partners) && playerData.favorite_partners.length > 0) {
     htmlContent += `
       <div class="section">
         <div class="section-title">👥 常用队友 (${playerData.favorite_partners.length}位)</div>
@@ -357,7 +375,7 @@ export function playerDataToHtml(playerData: any): string {
   }
 
   // 活跃度信息
-  if (playerData.activity && Array.isArray(playerData.activity) && playerData.activity.length > 0) {
+  if (displayConfig.showActivityStats && playerData.activity && Array.isArray(playerData.activity) && playerData.activity.length > 0) {
     let totalHours = 0;
     let maxHours = 0;
     let activeDays = 0;

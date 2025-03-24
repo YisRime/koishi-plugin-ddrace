@@ -2,6 +2,8 @@
  * DDNet玩家数据格式化模块
  */
 
+import { Config } from '.'
+
 /**
  * 基础格式化工具
  */
@@ -72,78 +74,97 @@ export const dateToString = formatter.date
 /**
  * 将玩家数据格式化为文本摘要
  * @param playerData - DDNet API返回的玩家数据对象
+ * @param config - 显示配置
  * @returns 格式化后的文本字符串
  */
-export function formatPlayerSummary(playerData: any): string {
+export function formatPlayerSummary(playerData: any, config?: Config): string {
   const playerId = playerData.player
   let summary = `🏆 ${playerId} 的 DDNet 信息\n`
 
+  // 应用默认配置（如果未提供）
+  const displayConfig = {
+    showRankInfo: config?.showRankInfo !== false,
+    showActivityInfo: config?.showActivityInfo !== false,
+    showGameInfo: config?.showGameInfo !== false,
+    showMapTypeStats: config?.showMapTypeStats !== false,
+    showRecentFinishes: config?.showRecentFinishes !== false,
+    showFavoritePartners: config?.showFavoritePartners !== false,
+    showActivityStats: config?.showActivityStats !== false,
+    showMapDetails: config?.showMapDetails !== false
+  }
+
   // 排名与分数信息
-  summary += formatter.section('📊 排名与分数')
+  if (displayConfig.showRankInfo) {
+    summary += formatter.section('📊 排名与分数')
 
-  // 总分信息
-  if (playerData.points && typeof playerData.points === 'object') {
-    const total = playerData.points.total || 0
-    const rank = playerData.points.rank || '未排名'
-    const points = playerData.points.points || 0
-    summary += `• 总分: ${points}/${total} (全球第 ${rank} 名)\n`
-  }
+    // 总分信息
+    if (playerData.points && typeof playerData.points === 'object') {
+      const total = playerData.points.total || 0
+      const rank = playerData.points.rank || '未排名'
+      const points = playerData.points.points || 0
+      summary += `• 总分: ${points}/${total} (全球第 ${rank} 名)\n`
+    }
 
-  // 个人与团队排名
-  if (playerData.rank?.rank) {
-    summary += `• 个人排名: 第 ${playerData.rank.rank} 名 (${playerData.rank.points || 0} 分)\n`
-  }
+    // 个人与团队排名
+    if (playerData.rank?.rank) {
+      summary += `• 个人排名: 第 ${playerData.rank.rank} 名 (${playerData.rank.points || 0} 分)\n`
+    }
 
-  if (playerData.team_rank?.rank) {
-    summary += `• 团队排名: 第 ${playerData.team_rank.rank} 名 (${playerData.team_rank.points || 0} 分)\n`
+    if (playerData.team_rank?.rank) {
+      summary += `• 团队排名: 第 ${playerData.team_rank.rank} 名 (${playerData.team_rank.points || 0} 分)\n`
+    }
   }
 
   // 最近活跃度
-  const hasRecentActivity = playerData.points_last_year || playerData.points_last_month || playerData.points_last_week
-  if (hasRecentActivity) {
-    summary += formatter.section('📅 最近活跃度')
+  if (displayConfig.showActivityInfo) {
+    const hasRecentActivity = playerData.points_last_year || playerData.points_last_month || playerData.points_last_week
+    if (hasRecentActivity) {
+      summary += formatter.section('📅 最近活跃度')
 
-    if (playerData.points_last_year?.points) {
-      summary += `• 过去一年: ${playerData.points_last_year.points} 分 (第 ${playerData.points_last_year.rank || '?'} 名)\n`
-    }
+      if (playerData.points_last_year?.points) {
+        summary += `• 过去一年: ${playerData.points_last_year.points} 分 (第 ${playerData.points_last_year.rank || '?'} 名)\n`
+      }
 
-    if (playerData.points_last_month?.points) {
-      summary += `• 过去一月: ${playerData.points_last_month.points} 分 (第 ${playerData.points_last_month.rank || '?'} 名)\n`
-    }
+      if (playerData.points_last_month?.points) {
+        summary += `• 过去一月: ${playerData.points_last_month.points} 分 (第 ${playerData.points_last_month.rank || '?'} 名)\n`
+      }
 
-    if (playerData.points_last_week?.rank) {
-      summary += `• 过去一周: ${playerData.points_last_week.points || 0} 分 (第 ${playerData.points_last_week.rank} 名)\n`
-    } else {
-      summary += `• 过去一周: 暂无排名\n`
+      if (playerData.points_last_week?.rank) {
+        summary += `• 过去一周: ${playerData.points_last_week.points || 0} 分 (第 ${playerData.points_last_week.rank} 名)\n`
+      } else {
+        summary += `• 过去一周: 暂无排名\n`
+      }
     }
   }
 
   // 游戏基本信息
-  summary += formatter.section('🎮 游戏信息')
+  if (displayConfig.showGameInfo) {
+    summary += formatter.section('🎮 游戏信息')
 
-  // 常用服务器
-  if (playerData.favorite_server) {
-    const server = typeof playerData.favorite_server === 'object'
-      ? (playerData.favorite_server.server || JSON.stringify(playerData.favorite_server))
-      : playerData.favorite_server
-    summary += `• 常用服务器: ${server}\n`
-  }
+    // 常用服务器
+    if (playerData.favorite_server) {
+      const server = typeof playerData.favorite_server === 'object'
+        ? (playerData.favorite_server.server || JSON.stringify(playerData.favorite_server))
+        : playerData.favorite_server
+      summary += `• 常用服务器: ${server}\n`
+    }
 
-  // 游戏时间
-  if (playerData.hours_played_past_365_days !== undefined) {
-    summary += `• 年度游戏时间: ${playerData.hours_played_past_365_days} 小时\n`
-  }
+    // 游戏时间
+    if (playerData.hours_played_past_365_days !== undefined) {
+      summary += `• 年度游戏时间: ${playerData.hours_played_past_365_days} 小时\n`
+    }
 
-  // 首次完成
-  if (playerData.first_finish) {
-    const formattedDate = formatter.date(playerData.first_finish.timestamp, 'year')
-    const map = playerData.first_finish.map
-    const timeStr = formatter.time(playerData.first_finish.time)
-    summary += `• 首次完成: ${formattedDate} ${map} (${timeStr})\n`
+    // 首次完成
+    if (playerData.first_finish) {
+      const formattedDate = formatter.date(playerData.first_finish.timestamp, 'year')
+      const map = playerData.first_finish.map
+      const timeStr = formatter.time(playerData.first_finish.time)
+      summary += `• 首次完成: ${formattedDate} ${map} (${timeStr})\n`
+    }
   }
 
   // 地图统计
-  if (playerData.types && typeof playerData.types === 'object') {
+  if (displayConfig.showMapTypeStats && playerData.types && typeof playerData.types === 'object') {
     summary += formatter.section('🗺️ 地图类型统计')
 
     Object.entries(playerData.types).forEach(([typeName, typeInfo]: [string, any]) => {
@@ -171,7 +192,7 @@ export function formatPlayerSummary(playerData: any): string {
       summary += `• ${typeName}: ${typePoints} 分 (${typeRank}), 完成 ${mapCount} 张地图\n`
 
       // 列出部分地图
-      if (mapCount > 0) {
+      if (mapCount > 0 && displayConfig.showMapDetails) {
         const mapNames = Object.keys(typeInfo.maps).slice(0, 10)
         summary += `  包括: ${mapNames.join(', ')}${mapCount > 10 ? ' 等...' : ''}\n`
       }
@@ -179,7 +200,7 @@ export function formatPlayerSummary(playerData: any): string {
   }
 
   // 最近完成记录
-  if (playerData.last_finishes?.length > 0) {
+  if (displayConfig.showRecentFinishes && playerData.last_finishes?.length > 0) {
     summary += formatter.section(`🏁 最近完成记录 (${playerData.last_finishes.length}项)`)
 
     const records = playerData.last_finishes.slice(0, 5)
@@ -193,7 +214,7 @@ export function formatPlayerSummary(playerData: any): string {
   }
 
   // 常用队友
-  if (playerData.favorite_partners?.length > 0) {
+  if (displayConfig.showFavoritePartners && playerData.favorite_partners?.length > 0) {
     summary += formatter.section(`👥 常用队友 (${playerData.favorite_partners.length}位)`)
 
     playerData.favorite_partners.slice(0, 5).forEach((partner: any) => {
@@ -204,7 +225,7 @@ export function formatPlayerSummary(playerData: any): string {
   }
 
   // 活跃度统计
-  if (playerData.activity?.length > 0) {
+  if (displayConfig.showActivityStats && playerData.activity?.length > 0) {
     let totalHours = 0
     let maxHours = 0
     let activeDays = 0
@@ -240,9 +261,10 @@ export function formatPlayerSummary(playerData: any): string {
 /**
  * 格式化玩家的分数信息（简洁版本）
  * @param playerData - DDNet API返回的玩家数据对象
+ * @param config - 显示配置
  * @returns 格式化后的简洁分数文本
  */
-export function formatScoreBrief(playerData: any): string {
+export function formatScoreBrief(playerData: any, config?: Config): string {
   const playerId = playerData.player || "未知玩家ID"
   let result = `🎮 ${playerId} 的分数统计\n\n`
 
@@ -264,43 +286,55 @@ export function formatScoreBrief(playerData: any): string {
 /**
  * 格式化玩家的详细分数信息
  * @param playerData - DDNet API返回的玩家数据对象
+ * @param config - 显示配置
  * @returns 格式化后的详细分数文本
  */
-export function formatScoreDetailed(playerData: any): string {
+export function formatScoreDetailed(playerData: any, config?: Config): string {
   const playerId = playerData.player || "未知玩家ID"
   let result = `🏆 ${playerId} 的详细分数信息\n\n`
 
+  // 应用默认配置（如果未提供）
+  const displayConfig = {
+    showRankInfo: config?.showRankInfo !== false,
+    showActivityInfo: config?.showActivityInfo !== false,
+    showRecentFinishes: config?.showRecentFinishes !== false
+  }
+
   // 总分与排名
-  if (playerData.points?.points !== undefined) {
-    result += `📊 总分: ${playerData.points.points}/${playerData.points.total} (全球第 ${playerData.points.rank} 名)\n`
-  }
+  if (displayConfig.showRankInfo) {
+    if (playerData.points?.points !== undefined) {
+      result += `📊 总分: ${playerData.points.points}/${playerData.points.total} (全球第 ${playerData.points.rank} 名)\n`
+    }
 
-  // 个人与团队排名
-  if (playerData.rank?.points) {
-    result += `个人排名: 第 ${playerData.rank.rank} 名 (${playerData.rank.points} 分)\n`
-  }
+    // 个人与团队排名
+    if (playerData.rank?.points) {
+      result += `个人排名: 第 ${playerData.rank.rank} 名 (${playerData.rank.points} 分)\n`
+    }
 
-  if (playerData.team_rank?.points) {
-    result += `团队排名: 第 ${playerData.team_rank.rank} 名 (${playerData.team_rank.points} 分)\n`
+    if (playerData.team_rank?.points) {
+      result += `团队排名: 第 ${playerData.team_rank.rank} 名 (${playerData.team_rank.points} 分)\n`
+    }
   }
-
-  result += formatter.section('📅 近期活跃度')
 
   // 近一年/月/周分数
-  if (playerData.points_last_year?.points) {
-    result += `过去一年: ${playerData.points_last_year.points} 分 (第 ${playerData.points_last_year.rank} 名)\n`
-  }
+  if (displayConfig.showActivityInfo) {
+    result += formatter.section('📅 近期活跃度')
 
-  if (playerData.points_last_month?.points) {
-    result += `过去一月: ${playerData.points_last_month.points} 分 (第 ${playerData.points_last_month.rank} 名)\n`
-  }
+    if (playerData.points_last_year?.points) {
+      result += `过去一年: ${playerData.points_last_year.points} 分 (第 ${playerData.points_last_year.rank} 名)\n`
+    }
 
-  if (playerData.points_last_week?.points) {
-    result += `过去一周: ${playerData.points_last_week.points} 分 (第 ${playerData.points_last_week.rank} 名)\n`
+    if (playerData.points_last_month?.points) {
+      result += `过去一月: ${playerData.points_last_month.points} 分 (第 ${playerData.points_last_month.rank} 名)\n`
+    }
+
+    if (playerData.points_last_week?.points) {
+      result += `过去一周: ${playerData.points_last_week.points} 分 (第 ${playerData.points_last_week.rank} 名)\n`
+    }
   }
 
   // 最近完成记录
-  if (playerData.last_finishes?.length > 0) {
+  if (displayConfig.showRecentFinishes && playerData.last_finishes?.length > 0) {
     result += formatter.section('🏁 最近完成')
 
     playerData.last_finishes.slice(0, 5).forEach((finish: any, index: number) => {
