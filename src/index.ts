@@ -41,7 +41,7 @@ export const Config: Schema<Config> = Schema.object({
     .default(false)
     .description('是否合并转发文本消息'),
   forwardName: Schema.string()
-    .default('DDRace 查询助手')
+    .default('DDNet 查询结果')
     .description('合并转发消息的发送者名称'),
   showRankInfo: Schema.boolean()
     .default(true)
@@ -230,7 +230,7 @@ export async function apply(ctx: Context, config: Config) {
         messages.push({
           type: 'node',
           data: {
-            name: config.forwardName || 'DDRace 查询助手',
+            name: config.forwardName || 'DDNet 查询结果',
             uin: session.selfId,
             content: title
           }
@@ -243,7 +243,7 @@ export async function apply(ctx: Context, config: Config) {
         messages.push({
           type: 'node',
           data: {
-            name: config.forwardName || 'DDRace 查询助手',
+            name: config.forwardName || 'DDNet 查询结果',
             uin: session.selfId,
             content: segment
           }
@@ -504,7 +504,7 @@ export async function apply(ctx: Context, config: Config) {
     : '-v 切换为图片模式显示'
 
   // 主命令组
-  const cmd = ctx.command('ddr [player:text]', '查询 DDNet 玩家信息')
+  const cmd = ctx.command('ddr [player:text]', 'DDNet 查询')
     .option('visual', toggleDescription, { fallback: undefined })
     .action(async ({ session, options }, player) => {
       if (!player) {
