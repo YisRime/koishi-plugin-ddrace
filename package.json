@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-ddrace",
-  "description": "DDRaceNetwork 玩家数据查询，支持以图片形式返回查询结果",
+  "description": "DDRaceNetwork 玩家和地图数据查询，支持文本和图片两种展示方式",
   "version": "1.1.6",
   "contributors": [
     "Yis_Rime <yis_rime@outlook.com>"
@@ -30,8 +30,5 @@
   },
   "peerDependencies": {
     "koishi": "^4.18.7"
-  },
-  "dependencies": {
-    "axios": "^1.4.0"
   }
 }
