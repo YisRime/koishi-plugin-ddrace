@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-ddrace",
   "description": "DDRaceNetwork 玩家和地图数据查询，支持文本和图片两种展示方式",
-  "version": "1.1.6",
+  "version": "1.2.0",
   "contributors": [
     "Yis_Rime <yis_rime@outlook.com>"
   ],
