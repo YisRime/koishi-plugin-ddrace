@@ -24,6 +24,8 @@ export const usage = `
  * 插件配置接口
  */
 export interface Config {
+  // 消息发送配置
+  messageSendType?: 'image' | 'forward' | 'text'
   // 玩家信息显示配置
   showRankInfo?: boolean
   showActivityInfo?: boolean
@@ -33,7 +35,6 @@ export interface Config {
   favoritePartnersCount?: number
   showActivityStats?: boolean
   mapDetailsCount?: number
-
   // 地图信息显示配置
   showMapBasicInfo?: boolean
   showMapStats?: boolean
@@ -46,6 +47,14 @@ export interface Config {
 }
 
 export const Config: Schema<Config> = Schema.intersect([
+  // 消息发送配置
+  Schema.object({
+    messageSendType: Schema.union([
+      Schema.const('image' as const).description('图片'),
+      Schema.const('forward' as const).description('合并转发'),
+      Schema.const('text' as const).description('文本')
+    ]).description('消息发送形式').default('forward')
+  }).description('消息发送配置'),
   // 玩家信息显示配置
   Schema.object({
     showRankInfo: Schema.boolean()
@@ -202,25 +211,41 @@ export async function apply(ctx: Context, config: Config) {
   async function handleQuery(data: any, formatText: (data: any, config?: Config) => string,
                            formatHtml?: (data: any, config?: Config) => string,
                            session?: any): Promise<string | h> {
-    // 尝试生成图片回复
-    if (canRenderImages && formatHtml) {
-      try {
-        const htmlContent = formatHtml(data, config);
-        const imageBuffer = await htmlToImage(htmlContent, ctx);
-        return h.image(imageBuffer, 'image/png');
-      } catch (error) {
-        ctx.logger.error('图片生成失败:', error);
-      }
+    // 根据配置选择发送形式
+    switch (config.messageSendType) {
+      case 'image':
+        // 尝试生成图片
+        if (canRenderImages && formatHtml) {
+          try {
+            const htmlContent = formatHtml(data, config);
+            const imageBuffer = await htmlToImage(htmlContent, ctx);
+            return h.image(imageBuffer, 'image/png');
+          } catch (error) {
+            ctx.logger.error('图片生成失败，回退到合并转发:', error);
+          }
+        }
+      case 'forward':
+        // 仅当需要合并转发时才生成文本
+        if (session) {
+          const textContent = formatText(data, config);
+          if (textContent.length > 100) {
+            try {
+              const title = `${data.player || data.name || '查询'} 的信息`;
+              const result = await sendForwardMsg(session, textContent, title);
+              return result;
+            } catch (error) {
+              ctx.logger.error('合并转发失败，回退到纯文本:', error);
+              // 回退到纯文本
+              return textContent;
+            }
+          }
+          // 文本长度不足以合并转发
+          return textContent;
+        }
+      default:
+        // 文本模式，生成并返回文本
+        return formatText(data, config);
     }
-    // 生成文本内容
-    const textContent = formatText(data, config);
-    // 短文本或无session直接返回
-    if (!session || textContent.length < 100) {
-      return textContent;
-    }
-    // 使用合并转发发送长文本
-    const title = `${data.player || data.name || '查询'} 的信息`;
-    return sendForwardMsg(session, textContent, title);
   }
 
   /**
