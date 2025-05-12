@@ -209,6 +209,32 @@ export async function htmlToImage(html: string, ctx: Context): Promise<Buffer> {
               border-radius: 6px;
               box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
             }
+            .map-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+              gap: 8px;
+            }
+            .map-card {
+              background: rgba(249, 249, 249, 0.7);
+              border-radius: 6px;
+              padding: 8px;
+              border-left: 3px solid #4a76a8;
+            }
+            .map-card.incomplete {
+              border-left: 3px solid #e63946;
+            }
+            .map-name {
+              font-weight: 600;
+              color: #4a76a8;
+            }
+            .map-points {
+              font-size: 12px;
+              color: #666;
+            }
+            .map-details {
+              font-size: 12px;
+              color: #666;
+            }
           </style>
         </head>
         <body>
@@ -367,27 +393,84 @@ export function playerDataToHtml(playerData: any, config?: Config): string {
     const typesEntries = Object.entries(playerData.types);
     typesEntries.forEach(([typeName, typeInfo]: [string, any]) => {
       if (!typeInfo?.maps) return;
-      const mapCount = Object.keys(typeInfo.maps).length;
-      let typePoints = 0;
+      // 计算已完成和总地图数
+      const mapEntries = Object.entries(typeInfo.maps);
+      const completedMaps = mapEntries.filter(([_, mapData]: [string, any]) =>
+        mapData.finishes && mapData.finishes > 0
+      );
+      const completedMapCount = completedMaps.length;
+      const totalMapCount = mapEntries.length;
+      // 计算积分和排名
+      let earnedPoints = 0;
+      let totalPoints = 0;
       let typeRank = '未排名';
       if (typeInfo.points) {
         if (typeof typeInfo.points === 'object') {
-          typePoints = typeInfo.points.points || typeInfo.points.total || 0;
+          earnedPoints = typeInfo.points.points || 0;
+          totalPoints = typeInfo.points.total || 0;
+          if (typeInfo.points.rank) {
+            typeRank = `第 ${typeInfo.points.rank} 名`;
+          }
         } else {
-          typePoints = typeInfo.points;
+          earnedPoints = typeInfo.points;
+          totalPoints = typeInfo.points;
         }
       }
-      if (typeInfo.rank?.rank) {
-        typeRank = `第 ${typeInfo.rank.rank} 名`;
-      }
-      htmlContent += `<div class="stat-item">• ${typeName}: <span class="highlight">${typePoints}</span> 积分 (${typeRank}), 已完成 <span class="highlight">${mapCount}</span> 张地图</div>`;
-      // 列出地图名称
-      if (mapCount > 0 && displayConfig.mapDetailsCount !== 0) {
-        const mapNames = Object.keys(typeInfo.maps);
-        const limit = displayConfig.mapDetailsCount === -1 ? mapCount : Math.min(displayConfig.mapDetailsCount, mapCount);
-        const displayMaps = mapNames.slice(0, limit);
-        const hasMore = mapCount > limit && displayConfig.mapDetailsCount !== -1;
-        htmlContent += `<div class="map-list">最近完成: ${displayMaps.join(', ')}${hasMore ? ' ...' : ''}</div>`;
+      // 显示类型总览
+      const displayTypeName = formatter.mapType(typeName);
+      htmlContent += `<div class="stat-item">• ${displayTypeName}: <span class="highlight">${earnedPoints}/${totalPoints}</span> 积分 (${typeRank}), 已完成 <span class="highlight">${completedMapCount}/${totalMapCount}</span> 张地图</div>`;
+      // 地图详情展示
+      if (totalMapCount > 0 && displayConfig.mapDetailsCount !== 0) {
+        const limit = displayConfig.mapDetailsCount === -1 ? totalMapCount : Math.min(displayConfig.mapDetailsCount, totalMapCount);
+        // 已完成地图展示
+        if (completedMaps.length > 0) {
+          const shownCompletedMaps = completedMaps.slice(0, limit);
+          htmlContent += `<div class="map-list"><strong>已完成地图:</strong>`;
+          htmlContent += `<div class="map-grid">`;
+          shownCompletedMaps.forEach(([mapName, mapData]: [string, any]) => {
+            const finishesText = mapData.finishes > 1 ? `完成${mapData.finishes}次` : '已完成';
+            const rankText = mapData.rank ? `排名#${mapData.rank}` : '';
+            const timeText = mapData.time ? formatter.time(mapData.time) : '';
+            htmlContent += `
+              <div class="map-card">
+                <div class="map-name">${mapName} <span class="map-points">[${mapData.points}分]</span></div>
+                <div class="map-details">${finishesText} ${rankText} ${timeText}</div>
+              </div>
+            `;
+          });
+          htmlContent += `</div>`;
+          // 显示是否有更多已完成地图
+          const hasMoreCompleted = completedMaps.length > limit && displayConfig.mapDetailsCount !== -1;
+          if (hasMoreCompleted) {
+            htmlContent += `<div class="small">... 以及其他 ${completedMaps.length - limit} 张已完成地图</div>`;
+          }
+          htmlContent += `</div>`;
+        }
+        // 未完成地图展示
+        const uncompletedMaps = mapEntries.filter(([_, mapData]: [string, any]) =>
+          !mapData.finishes || mapData.finishes === 0
+        );
+        if (uncompletedMaps.length > 0) {
+          const shownUncompletedMaps = uncompletedMaps.slice(0, limit);
+          htmlContent += `<div class="map-list"><strong>未完成地图:</strong>`;
+          htmlContent += `<div class="map-grid">`;
+          shownUncompletedMaps.forEach(([mapName, mapData]: [string, any]) => {
+            const totalFinishes = mapData.total_finishes ? `${mapData.total_finishes}人完成` : '';
+            htmlContent += `
+              <div class="map-card incomplete">
+                <div class="map-name">${mapName} <span class="map-points">[${mapData.points}分]</span></div>
+                <div class="map-details">${totalFinishes}</div>
+              </div>
+            `;
+          });
+          htmlContent += `</div>`;
+          // 显示是否有更多未完成地图
+          const hasMoreUncompleted = uncompletedMaps.length > limit && displayConfig.mapDetailsCount !== -1;
+          if (hasMoreUncompleted) {
+            htmlContent += `<div class="small">... 以及其他 ${uncompletedMaps.length - limit} 张未完成地图</div>`;
+          }
+          htmlContent += `</div>`;
+        }
       }
     });
     htmlContent += `</div>`;
@@ -409,7 +492,7 @@ export function playerDataToHtml(playerData: any, config?: Config): string {
         const countryFlag = finish.country ? `${finish.country} ` : '';
         htmlContent += `
           <div class="finish-card">
-            <div>${finish.map} (${finish.type || '未知'}) <span class="finish-time">${timeString}</span></div>
+            <div>${finish.map} (${formatter.mapType(finish.type)}) <span class="finish-time">${timeString}</span></div>
             <div class="finish-date">${formattedDate} - ${countryFlag}服务器</div>
           </div>
         `;

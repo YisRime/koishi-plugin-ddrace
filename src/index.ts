@@ -170,7 +170,7 @@ export async function apply(ctx: Context, config: Config) {
         messages.push({
           type: 'node',
           data: {
-            name: 'DDRace 查询结果',
+            name: 'DDRace 查询',
             uin: session.selfId,
             content: title
           }
@@ -181,7 +181,7 @@ export async function apply(ctx: Context, config: Config) {
         messages.push({
           type: 'node',
           data: {
-            name: 'DDRace 查询结果',
+            name: 'DDRace 查询',
             uin: session.selfId,
             content: segment
           }

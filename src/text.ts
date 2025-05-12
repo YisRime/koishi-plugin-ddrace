@@ -48,6 +48,30 @@ export const formatter = {
     if (!total) return `${current} 项`
     const percent = ((current / total) * 100).toFixed(1)
     return `${current}/${total} (${percent}%)`
+  },
+
+  /**
+   * 地图类型映射
+   * @param type 英文地图类型
+   * @returns 中文地图类型
+   */
+  mapType(type: string): string {
+    const typeMapping: Record<string, string> = {
+      'Novice': '简单',
+      'Moderate': '中阶',
+      'Brutal': '高阶',
+      'Insane': '疯狂',
+      'Dummy': '分身',
+      'DDmaX.Easy': '古典.Easy',
+      'DDmaX.Next': '古典.Next',
+      'DDmaX.Pro': '古典.Pro',
+      'DDmaX.Nut': '古典.Nut',
+      'Oldschool': '传统',
+      'Solo':'单人',
+      'Race': '竞速',
+      'Fun': '娱乐'
+    }
+    return typeMapping[type] || type
   }
 }
 
@@ -134,29 +158,68 @@ export function formatPlayerSummary(playerData: any, config?: Config): string {
     summary += `\n🗺️ 地图完成统计\n`
     Object.entries(playerData.types).forEach(([typeName, typeInfo]: [string, any]) => {
       if (!typeInfo?.maps) return
-      const mapCount = Object.keys(typeInfo.maps).length
+      // 计算完成地图数量和总地图数量
+      const mapEntries = Object.entries(typeInfo.maps)
+      const completedMaps = mapEntries.filter(([_, mapData]: [string, any]) =>
+        mapData.finishes && mapData.finishes > 0
+      )
+      const completedMapCount = completedMaps.length
+      const totalMapCount = mapEntries.length
       let typePoints = 0
+      let earnedPoints = 0
       let typeRank = '未排名'
       // 计算积分
       if (typeInfo.points) {
         if (typeof typeInfo.points === 'object') {
-          typePoints = typeInfo.points.points || typeInfo.points.total || 0
+          earnedPoints = typeInfo.points.points || 0
+          typePoints = typeInfo.points.total || 0
+          if (typeInfo.points.rank) {
+            typeRank = `第 ${typeInfo.points.rank} 名`
+          }
         } else {
+          earnedPoints = typeInfo.points
           typePoints = typeInfo.points
         }
       }
-      // 解析排名
-      if (typeInfo.rank?.rank) {
-        typeRank = `第 ${typeInfo.rank.rank} 名`
-      }
       // 显示地图统计
-      summary += `• ${typeName}: ${typePoints} 积分 (${typeRank}), 已完成 ${mapCount} 张地图\n`
-      // 列出部分地图
-      if (mapCount > 0 && displayConfig.mapDetailsCount !== 0) {
-        const limit = displayConfig.mapDetailsCount === -1 ? mapCount : Math.min(displayConfig.mapDetailsCount, mapCount)
-        const mapNames = Object.keys(typeInfo.maps).slice(0, limit)
-        const hasMore = mapCount > limit && displayConfig.mapDetailsCount !== -1
-        summary += `  最近完成: ${mapNames.join(', ')}${hasMore ? ' 等...' : ''}\n`
+      const displayTypeName = formatter.mapType(typeName)
+      summary += `• ${displayTypeName}: ${earnedPoints}/${typePoints} 积分 (${typeRank}), 已完成 ${completedMapCount}/${totalMapCount} 张地图\n`
+      // 列出部分地图及其详情
+      if (totalMapCount > 0 && displayConfig.mapDetailsCount !== 0) {
+        const limit = displayConfig.mapDetailsCount === -1 ? totalMapCount : Math.min(displayConfig.mapDetailsCount, totalMapCount)
+        // 找出已完成的地图
+        if (completedMaps.length > 0) {
+          const shownCompletedMaps = completedMaps.slice(0, limit)
+          summary += `  已完成地图:\n`
+          shownCompletedMaps.forEach(([mapName, mapData]: [string, any]) => {
+            const finishesText = mapData.finishes > 1 ? `完成${mapData.finishes}次` : '已完成'
+            const rankText = mapData.rank ? `排名#${mapData.rank}` : ''
+            const timeText = mapData.time ? `(${formatter.time(mapData.time)})` : ''
+            const pointsText = mapData.points ? `[${mapData.points}分]` : ''
+            summary += `   - ${mapName} ${pointsText} ${finishesText} ${rankText} ${timeText}\n`
+          })
+          const hasMore = completedMaps.length > limit && displayConfig.mapDetailsCount !== -1
+          if (hasMore) {
+            summary += `   ... 以及其他 ${completedMaps.length - limit} 张已完成地图\n`
+          }
+        }
+        // 找出未完成但有数据的地图
+        const uncompletedMaps = mapEntries.filter(([_, mapData]: [string, any]) =>
+          !mapData.finishes || mapData.finishes === 0
+        )
+        if (uncompletedMaps.length > 0) {
+          const shownUncompletedMaps = uncompletedMaps.slice(0, limit)
+          summary += `  未完成地图:\n`
+          shownUncompletedMaps.forEach(([mapName, mapData]: [string, any]) => {
+            const pointsText = mapData.points ? `[${mapData.points}分]` : ''
+            const totalFinishes = mapData.total_finishes ? `共${mapData.total_finishes}人完成` : ''
+            summary += `   - ${mapName} ${pointsText} ${totalFinishes}\n`
+          })
+          const hasMore = uncompletedMaps.length > limit && displayConfig.mapDetailsCount !== -1
+          if (hasMore) {
+            summary += `   ... 以及其他 ${uncompletedMaps.length - limit} 张未完成地图\n`
+          }
+        }
       }
     })
   }
@@ -171,7 +234,9 @@ export function formatPlayerSummary(playerData: any, config?: Config): string {
       if (finish.timestamp && finish.map) {
         const formattedDate = formatter.date(finish.timestamp, 'short')
         const timeStr = formatter.time(finish.time)
-        summary += `• ${finish.map} (${finish.country || ''} ${finish.type || ''}) - ${timeStr} [${formattedDate}]\n`
+        const displayType = formatter.mapType(finish.type || '')
+        const countryTag = finish.country ? `${finish.country} ` : ''
+        summary += `• ${finish.map} (${countryTag}${displayType}) - ${timeStr} [${formattedDate}]\n`
       }
     })
   }
@@ -238,7 +303,8 @@ export function formatMapInfo(mapData: any, config?: Config): string {
   let result = `🗺️ 地图「${mapData.name}」详细信息\n\n`
   // 基本信息
   if (displayConfig.showMapBasicInfo) {
-    result += `类型: ${mapData.type || '未知'} (${stars})\n`
+    const displayType = formatter.mapType(mapData.type || '未知')
+    result += `类型: ${displayType} (${stars})\n`
     result += `作者: ${mapData.mapper || '未知'}\n`
     result += `难度: ${mapData.difficulty || 0}/5 • 积分值: ${mapData.points || 0}\n`
     // 发布日期
